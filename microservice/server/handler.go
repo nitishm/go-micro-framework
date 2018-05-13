@@ -4,8 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-
-	log "github.com/sirupsen/logrus"
 )
 
 // Message defines the message structure to be used by the microservice framework.
@@ -22,7 +20,7 @@ type Message struct {
 // It takes in a slice of bytes, coming in from the network
 // and demultiplexes the message using a map provided to it with all the
 // service endpoints.
-func ByteHandler(in []byte, serviceEndpointMap ServiceEndpointMap) (err error) {
+func ByteHandler(in []byte, serviceEndpointMap ServiceEndpointMap) (out []byte, err error) {
 	msg := &Message{}
 	err = json.Unmarshal(in, msg)
 	if err != nil {
@@ -35,11 +33,10 @@ func ByteHandler(in []byte, serviceEndpointMap ServiceEndpointMap) (err error) {
 		return
 	}
 
-	resp, err := ep.Handle(context.Background(), []byte(msg.ServiceMessage))
+	out, err = ep.Handle(context.Background(), []byte(msg.ServiceMessage))
 	if err != nil {
-		return err
+		return nil, err
 	}
-	log.Infof("Response ByteHandler %#v\n", resp)
 
 	return
 }

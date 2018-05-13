@@ -141,7 +141,7 @@ func consumer(master sarama.Consumer, quit chan bool, topic Topic, consume Handl
 				"FunctionName": funcName(),
 				"Topic":        topic.Name,
 			}).Debugf("CONSUMER - Message consumed %#v\n", string(msg.Value))
-			err := consume(msg.Value, topic.ServiceEndpointMap)
+			_, err := consume(msg.Value, topic.ServiceEndpointMap)
 			if err != nil {
 				log.WithFields(log.Fields{
 					"Error": err,

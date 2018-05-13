@@ -12,7 +12,7 @@ type Service string
 type ServiceEndpointMap map[Service]endpoint.Endpoint
 
 // Handler is a func signature implemented by the Endpoint Handle() method
-type Handler func(in []byte, serviceEndpointMap ServiceEndpointMap) (err error)
+type Handler func(in []byte, serviceEndpointMap ServiceEndpointMap) (out []byte, err error)
 
 // StartStopInterface is composed of the Start() and Stop() methods to be implemented by the server
 type StartStopInterface interface {
