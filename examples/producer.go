@@ -1,3 +1,4 @@
+// Use this as an test program to generate a message on the kafka topic.
 package main
 
 import (
@@ -8,7 +9,7 @@ import (
 
 func main() {
 	kafkacfg := configuration.MyKafkaConfig()
-	err := kafkacfg.LoadConfig("kafka.config")
+	err := kafkacfg.LoadConfig("kafka-microservice/kafka.json")
 	if err != nil {
 		log.Fatal("Failed to LoadConfig - %#v\n", err)
 		return

@@ -3,8 +3,8 @@ package main
 import (
 	"flag"
 	"fmt"
-	"go-micro-framework/examples/simple-microservice/server"
-	"go-micro-framework/examples/simple-microservice/service"
+	"go-micro-framework/examples/kafka-microservice/server"
+	"go-micro-framework/examples/kafka-microservice/service"
 	"os"
 
 	log "github.com/sirupsen/logrus"

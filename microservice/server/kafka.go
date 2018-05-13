@@ -11,12 +11,13 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-func FuncName() string {
+func funcName() string {
 	pc, _, _, _ := runtime.Caller(1)
 	file, line := runtime.FuncForPC(pc).FileLine(pc)
 	return runtime.FuncForPC(pc).Name() + "::" + file + "::" + strconv.Itoa(line)
 }
 
+// KafkaConsumer encapsulates all members used for the kafka server.
 type KafkaConsumer struct {
 	cfg    *configuration.KafkaConfig
 	config *sarama.Config
@@ -24,11 +25,14 @@ type KafkaConsumer struct {
 	topics map[string]Topic
 	quit   chan bool
 }
+
+// Topic encapsulates a kafka channel name and a map of endpoints used on that channel
 type Topic struct {
 	Name               string
 	ServiceEndpointMap ServiceEndpointMap
 }
 
+// MyTopic returns a new Topic instance
 func MyTopic(name string) (topic Topic) {
 	return Topic{
 		Name:               name,
@@ -36,6 +40,7 @@ func MyTopic(name string) (topic Topic) {
 	}
 }
 
+// MyKafkaConsumer takes in configuration object and returns a new KafkaConsumer instance.
 func MyKafkaConsumer(cfg *configuration.KafkaConfig) (kc *KafkaConsumer, err error) {
 	config := sarama.NewConfig()
 	config.Consumer.Return.Errors = true
@@ -56,6 +61,7 @@ func MyKafkaConsumer(cfg *configuration.KafkaConfig) (kc *KafkaConsumer, err err
 	return
 }
 
+// Start is an implementation of the Server Start() method.
 func (kc *KafkaConsumer) Start() (err error) {
 	for _, topic := range kc.topics {
 		go func(topic Topic) {
@@ -69,17 +75,22 @@ func (kc *KafkaConsumer) Start() (err error) {
 	return
 }
 
+// Stop is an implementation of the Server Stop() method
 func (kc *KafkaConsumer) Stop() (err error) {
 	close(kc.quit)
 	kc.master.Close()
 	return
 }
 
+// RegisterNamespace is an implementation of the Server RegisterNamespace method.
+// In kafka a namespace is the same as the channel name.
 func (kc *KafkaConsumer) RegisterNamespace(name string) {
 	kc.topics[name] = MyTopic(name)
 	return
 }
 
+// RegisterService is an implementation of the server RegisterService method.
+// In kafka this is used to demux the messages coming in on a single channel/topic.
 func (kc *KafkaConsumer) RegisterService(namespace string, service Service, ep endpoint.Endpoint) {
 	kc.topics[namespace].ServiceEndpointMap[service] = ep
 	return
@@ -87,14 +98,14 @@ func (kc *KafkaConsumer) RegisterService(namespace string, service Service, ep e
 
 func consumer(master sarama.Consumer, quit chan bool, topic Topic, consume Handler, cfg *configuration.KafkaConfig) {
 	log.WithFields(log.Fields{
-		"FunctionName": FuncName(),
+		"FunctionName": funcName(),
 		"Topic":        topic.Name,
 	}).Info("Starting Consumer")
 
 	consumer, err := master.ConsumePartition(topic.Name, cfg.Partition, cfg.Offset)
 	if err != nil {
 		log.WithFields(log.Fields{
-			"FunctionName": FuncName(),
+			"FunctionName": funcName(),
 			"Topic":        topic.Name,
 			"Error":        err.Error(),
 		}).Error("Failed ConsumerPartition")
@@ -103,14 +114,14 @@ func consumer(master sarama.Consumer, quit chan bool, topic Topic, consume Handl
 	defer func() {
 		if err = consumer.Close(); err != nil {
 			log.WithFields(log.Fields{
-				"FunctionName": FuncName(),
+				"FunctionName": funcName(),
 				"Error":        err.Error(),
 			}).Error("Failed to close Producer")
 		}
 
 		if err := master.Close(); err != nil {
 			log.WithFields(log.Fields{
-				"FunctionName": FuncName(),
+				"FunctionName": funcName(),
 				"Error":        err.Error(),
 			}).Error("Failed to close Producer")
 		}
@@ -122,12 +133,12 @@ func consumer(master sarama.Consumer, quit chan bool, topic Topic, consume Handl
 			return
 		case err := <-consumer.Errors():
 			log.WithFields(log.Fields{
-				"FunctionName": FuncName(),
+				"FunctionName": funcName(),
 				"Error":        err.Error(),
 			}).Debug("Received error on consumer channel.")
 		case msg := <-consumer.Messages():
 			log.WithFields(log.Fields{
-				"FunctionName": FuncName(),
+				"FunctionName": funcName(),
 				"Topic":        topic.Name,
 			}).Debugf("CONSUMER - Message consumed %#v\n", string(msg.Value))
 			err := consume(msg.Value, topic.ServiceEndpointMap)
@@ -140,6 +151,7 @@ func consumer(master sarama.Consumer, quit chan bool, topic Topic, consume Handl
 	}
 }
 
+// KafkaProducer encapsulates all the members used by a kafka producer
 type KafkaProducer struct {
 	cfg     *configuration.KafkaConfig
 	config  *sarama.Config
@@ -148,6 +160,7 @@ type KafkaProducer struct {
 	quit    chan bool
 }
 
+// MyKafkaProducer takes in a configuration object and returns a KafkaProducer instance.
 func MyKafkaProducer(cfg *configuration.KafkaConfig) (kp *KafkaProducer, err error) {
 	config := sarama.NewConfig()
 	config.Producer.Return.Successes = true
@@ -168,6 +181,8 @@ func MyKafkaProducer(cfg *configuration.KafkaConfig) (kp *KafkaProducer, err err
 	return
 }
 
+// Start is used to start a go routine for the kafka producer.
+// All messages produced are read by the msgChan passed to the producer() method.
 func (kp *KafkaProducer) Start() (err error) {
 	go func() {
 		producer(kp.master, kp.msgChan, kp.quit, kp.cfg)
@@ -179,17 +194,19 @@ func (kp *KafkaProducer) Start() (err error) {
 	return
 }
 
+// Stop gracefully stops the kafka producer by writing to the quit channel.
 func (kp *KafkaProducer) Stop() (err error) {
 	close(kp.quit)
 	kp.master.Close()
 	return
 }
 
+// Produce is used by the client to send a message through kafka producer.
 func (kp *KafkaProducer) Produce(topic string, msg interface{}) (err error) {
 	b, err := json.Marshal(msg)
 	if err != nil {
 		log.WithFields(log.Fields{
-			"FunctionName": FuncName(),
+			"FunctionName": funcName(),
 			"Value":        msg,
 			"Error":        err,
 		}).Error("Failed Marshal")
@@ -205,13 +222,13 @@ func (kp *KafkaProducer) Produce(topic string, msg interface{}) (err error) {
 
 func producer(master sarama.SyncProducer, msgChan chan sarama.ProducerMessage, quit chan bool, cfg *configuration.KafkaConfig) {
 	log.WithFields(log.Fields{
-		"FunctionName": FuncName(),
+		"FunctionName": funcName(),
 	}).Info("Starting Producer")
 
 	defer func() {
 		if err := master.Close(); err != nil {
 			log.WithFields(log.Fields{
-				"FunctionName": FuncName(),
+				"FunctionName": funcName(),
 				"Error":        err,
 			}).Error("Failed to close Producer")
 		}
@@ -225,14 +242,14 @@ func producer(master sarama.SyncProducer, msgChan chan sarama.ProducerMessage, q
 			partition, offset, err := master.SendMessage(&msg)
 			if err != nil {
 				log.WithFields(log.Fields{
-					"FunctionName": FuncName(),
+					"FunctionName": funcName(),
 					"Error":        err,
 				}).Error("Failed SendMessage")
 				continue
 			}
 
 			log.WithFields(log.Fields{
-				"FunctionName": FuncName(),
+				"FunctionName": funcName(),
 				"Topic":        msg.Topic,
 				"Partition":    partition,
 				"Offset":       offset,
